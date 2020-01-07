@@ -1,0 +1,511 @@
+public class NewProductActivity extends AppCompatActivity implements NewProductAdapter.onItemClickListener
+{
+    private static final int PICKFILE_RESULT_CODE = 1;
+    private Toolbar toolbar;
+
+    private EditText textName;
+    private EditText textDescriptions;
+    private EditText textPrice;
+    private RecyclerView recyclerView;
+    private ScrollView scrollView;
+    private ProgressBar progressBar;
+    private FloatingActionButton buttonProduct;
+    private ArrayList<String> arrayList;
+    private NewProductAdapter adapter;
+    private String stringFile;
+    private String lang;
+    private static int count = 0;
+
+
+    private NotificationManager mNotificationManager;
+    private NotificationCompat.Builder mBuilder;
+    int notificationId;
+
+    public static final String NOTIFICATION_CHANNEL_ID = "PRODUCTS";
+    public static final String NOTIFICATION_CHANNEL_NAME = "PRODUCT";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState)
+    {
+        super.onCreate(savedInstanceState);
+        SharedPreferences preferences = getSharedPreferences("language", MODE_PRIVATE);
+        lang = preferences.getString("lang", "");
+
+        Locale locale = new Locale(lang);
+        Locale.setDefault(locale);
+        Configuration config = getBaseContext().getResources().getConfiguration();
+        config.locale = locale;
+        getBaseContext().getResources().updateConfiguration(config, getBaseContext().getResources().getDisplayMetrics());
+        setContentView(R.layout.activity_new_product);
+
+        arrayList = new ArrayList<>();
+        toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        toolbar.setNavigationIcon(R.drawable.ic_arrow_back);
+
+        progressBar = findViewById(R.id.progressBar);
+        scrollView = findViewById(R.id.scrollView);
+        buttonProduct = findViewById(R.id.button_product);
+        textName = findViewById(R.id.text_name);
+        textDescriptions = findViewById(R.id.text_descriptions);
+        textPrice = findViewById(R.id.text_price);
+        recyclerView = findViewById(R.id.recyclerView);
+
+
+        toolbar.setNavigationOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View view)
+            {
+                onBackPressed();
+            }
+        });
+
+        adapter = new NewProductAdapter(NewProductActivity.this, arrayList);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayout.HORIZONTAL, true));
+        recyclerView.setAdapter(adapter);
+        adapter.setOnClick(this);
+
+        /*textPrice.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2)
+            {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2)
+            {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable)
+            {
+                if (textPrice == null) return;
+                String inputString = editable.toString();
+                textPrice.removeTextChangedListener(this);
+                String cleanString = inputString.toString().replaceAll("[.]", "");
+                BigDecimal bigDecimal = new BigDecimal(cleanString).setScale(2, BigDecimal.ROUND_FLOOR).divide(new BigDecimal(100), BigDecimal.ROUND_FLOOR);
+                String converted = NumberFormat.getNumberInstance().format(bigDecimal).replaceAll("[,]", "");
+                textPrice.setText(converted);
+                textPrice.setSelection(converted.length());
+                textPrice.addTextChangedListener(this);
+
+
+            }
+        });*/
+
+        textPrice.setFilters(new InputFilter[]{new CurrencyFormatInputFilter()});
+        //textPrice.addTextChangedListener(new CurrencyTextWatcher());
+
+
+        buttonProduct.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                Log.e("text", textPrice.getText().toString() + "");
+
+                if (Helper.isNetworkAvailable(NewProductActivity.this))
+                {
+                    Random rn = new Random();
+                    int random = rn.nextInt(10000) + 1;
+
+                    Log.e("countCode", random + "");
+                    String Code = String.valueOf(random);
+                    String Name = textName.getText().toString();
+                    String Desc = textDescriptions.getText().toString();
+                    String Price = textPrice.getText().toString();
+
+                    int l = 0;
+                    if (lang.equals("en"))
+                        l = 1;
+                    else if (lang.equals("gu"))
+                        l = 2;
+                    else
+                        l = 1;
+
+                    Log.e("code", Code + "");
+                    Log.e("res name ", Name + " desc : " + Desc + " pr: " + Price + " L :" + l);
+
+                    if (TextUtils.isEmpty(Name))
+                    {
+                        textName.setError("Enter Name");
+                        textName.requestFocus();
+                        return;
+                    }
+                    if (TextUtils.isEmpty(Desc))
+                    {
+                        textDescriptions.setError("Enter Description");
+                        textDescriptions.requestFocus();
+                        return;
+                    }
+                    if (TextUtils.isEmpty(Price))
+                    {
+                        textPrice.setError("Enter Price");
+                        textPrice.requestFocus();
+                        return;
+                    }
+                    if (TextUtils.isEmpty(stringFile))
+                    {
+                        Toast.makeText(NewProductActivity.this, "Select product image", Toast.LENGTH_SHORT).show();
+                    }
+                    else
+                    {
+                        if (arrayList.size() != 0)
+                        {
+                            setNotificatonProgress();
+
+                            progressBar.setVisibility(View.VISIBLE);
+                            scrollView.setVisibility(View.GONE);
+
+                            mBuilder.setProgress(100, progressBar.getProgress(), true);
+                            mNotificationManager.notify(notificationId, mBuilder.build());
+
+                            Log.e("size", arrayList.size() + " size");
+
+                        /*if (progressBar.getProgress() == 100)
+                        {
+                            mBuilder.setProgress(100, progressBar.getProgress(), false);
+                            mBuilder.setContentText("upload");
+                        }*/
+
+                            Map<String, okhttp3.RequestBody> maps = new HashMap<>();
+                            for (int i = 0; i < arrayList.size(); i++)
+                            {
+                                stringFile = arrayList.get(i);
+
+                                Log.e("sizeList", arrayList.size() + "");
+                                Log.e("sizeList", stringFile + "");
+
+                                File file = new File(arrayList.get(i));
+                                okhttp3.RequestBody requestFile = okhttp3.RequestBody.create(okhttp3.MediaType.parse("multipart/form-data"), file);
+                                String filename = "ProductImage" + i;
+                                maps.put(filename + "\"; filename=\"" + file.getName(), requestFile);
+                            }
+
+                            createProduct(Code, Name, Desc, Price, l, maps);
+                        }
+                        else
+                            Toast.makeText(NewProductActivity.this, "Select product image", Toast.LENGTH_SHORT).show();
+
+
+                    }
+
+                }
+                else
+                {
+                    Toast.makeText(NewProductActivity.this, "Network not available", Toast.LENGTH_SHORT).show();
+                }
+
+
+            }
+        });
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu)
+    {
+        getMenuInflater().inflate(R.menu.menu_attach, menu);
+
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item)
+    {
+        int id = item.getItemId();
+
+        if (id == R.id.action_attach_file)
+        {
+            checkPermission();
+        }
+
+        return super.onOptionsItemSelected(item);
+
+
+    }
+
+    private void checkPermission()
+    {
+        Dexter.withActivity(this)
+                .withPermissions(
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE)
+                .withListener(new MultiplePermissionsListener()
+                {
+                    @Override
+                    public void onPermissionsChecked(MultiplePermissionsReport report)
+                    {
+                        if (report.areAllPermissionsGranted())
+                        {
+                            selectFile();
+                        }
+
+                        if (report.isAnyPermissionPermanentlyDenied())
+                        {
+                            Toast.makeText(NewProductActivity.this, "permission denied", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onPermissionRationaleShouldBeShown(List<PermissionRequest> permissions, PermissionToken token)
+                    {
+                        token.continuePermissionRequest();
+                    }
+
+
+                }).
+                withErrorListener(new PermissionRequestErrorListener()
+                {
+                    @Override
+                    public void onError(DexterError error)
+                    {
+                        Toast.makeText(getApplicationContext(), "Some Error! ", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .onSameThread()
+                .check();
+    }
+
+
+    private void selectFile()
+    {
+        Intent i = new Intent(
+                Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+
+        startActivityForResult(i, PICKFILE_RESULT_CODE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data)
+    {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == PICKFILE_RESULT_CODE && resultCode == RESULT_OK && null != data)
+        {
+            Uri selectedImage = data.getData();
+            String[] filePathColumn = {MediaStore.Images.Media.DATA};
+
+            Cursor cursor = getContentResolver().query(selectedImage,
+                    filePathColumn, null, null, null);
+            cursor.moveToFirst();
+
+            int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+            String picturePath = cursor.getString(columnIndex);
+            cursor.close();
+
+            //stringFile = new String();
+            stringFile = picturePath;
+            arrayList.add(stringFile);
+            adapter.notifyDataSetChanged();
+
+
+            Log.e("size", arrayList.size() + "");
+            Log.e("sizePath", stringFile + "");
+        }
+    }
+
+
+    private void createProduct(String code, String name, String desc, String price, int lang, Map<String, RequestBody> body)
+    {
+        DCService service = RetrofitInterceptor.getClient().create(DCService.class);
+        Call<String> call = service.createProduct(code, name, desc, price, lang, body);
+        call.enqueue(new Callback<String>()
+        {
+            @Override
+            public void onResponse(Call<String> call, Response<String> response)
+            {
+                if (response.isSuccessful())
+                {
+                    mBuilder.setProgress(0, 0, false);
+
+                    mBuilder.setContentText("Product uploaded");
+                    mBuilder.setOngoing(false);
+                    mNotificationManager.notify(notificationId, mBuilder.build());
+
+
+                    Log.e("res", response.body());
+                    progressBar.setVisibility(View.GONE);
+                    //scrollView.setVisibility(View.VISIBLE);
+                    setResult(RESULT_OK);
+                    finish();
+                }
+                else
+                {
+                    Toast.makeText(NewProductActivity.this, "PRODUCT_ALREADY_EXISTS", Toast.LENGTH_SHORT).show();
+                    progressBar.setVisibility(View.GONE);
+                    scrollView.setVisibility(View.VISIBLE);
+                    Log.e("error", response.code() + "");
+                    try
+                    {
+                        Log.e("error", response.errorBody().string());
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<String> call, Throwable t)
+            {
+                Log.e("error", t.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void onItemCancel(View view, int position)
+    {
+        String list = arrayList.get(position);
+        arrayList.remove(list);
+        adapter.notifyDataSetChanged();
+    }
+
+    @Override
+    public void onBackPressed()
+    {
+        super.onBackPressed();
+        setResult(RESULT_CANCELED);
+    }
+
+
+    public class CurrencyFormatInputFilter implements InputFilter
+    {
+
+        Pattern mPattern = Pattern.compile("(0|[1-9]+[0-9]*)?(\\.[0-9]{0,2})?");
+
+        @Override
+        public CharSequence filter(
+                CharSequence source,
+                int start,
+                int end,
+                Spanned dest,
+                int dstart,
+                int dend)
+        {
+
+            String result =
+                    dest.subSequence(0, dstart)
+                            + source.toString()
+                            + dest.subSequence(dend, dest.length());
+
+            Matcher matcher = mPattern.matcher(result);
+
+            if (!matcher.matches()) return dest.subSequence(dstart, dend);
+
+            return null;
+        }
+    }
+
+    class CurrencyTextWatcher implements TextWatcher
+    {
+
+        boolean mEditing;
+
+        public CurrencyTextWatcher()
+        {
+            mEditing = false;
+        }
+
+        public synchronized void afterTextChanged(Editable s)
+        {
+            if (!mEditing)
+            {
+                mEditing = true;
+
+                String digits = s.toString().replaceAll("\\D", "");
+                NumberFormat nf = NumberFormat.getCurrencyInstance();
+                try
+                {
+                    String formatted = nf.format(Double.parseDouble(digits) / 100);
+                    s.replace(0, s.length(), formatted);
+                }
+                catch (NumberFormatException nfe)
+                {
+                    s.clear();
+                }
+
+                mEditing = false;
+            }
+        }
+
+        public void beforeTextChanged(CharSequence s, int start, int count, int after)
+        {
+        }
+
+        public void onTextChanged(CharSequence s, int start, int before, int count)
+        {
+        }
+
+    }
+
+    private void setNotificatonProgress()
+    {
+        /*NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "CHANNEL_8");
+        builder.setContentTitle("Product")
+                .setContentText("Uploading...")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setPriority(NotificationCompat.PRIORITY_LOW);
+
+        int PROGRESS_MAX = 100;
+        int PROGRESS_CURRENT = 0;
+        builder.setProgress(PROGRESS_MAX, PROGRESS_CURRENT, false);
+        notificationManager.notify(1001, builder.build());
+
+        builder.setContentText("Uploading complete")
+                .setProgress(0, 0, false);
+        notificationManager.notify(1001, builder.build());*/
+
+        notificationId = (int) System.currentTimeMillis();
+        Context mContext = NewProductActivity.this;
+        Intent resultIntent = new Intent();
+        PendingIntent resultPendingIntent = PendingIntent.getActivity(mContext,
+                0 /* Request code */, resultIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT);
+
+        mBuilder = new NotificationCompat.Builder(mContext, NOTIFICATION_CHANNEL_ID);
+        mBuilder.setSmallIcon(R.mipmap.ic_launcher);
+        mBuilder.setColor(ContextCompat.getColor(mContext, R.color.colorPrimary));
+        mBuilder.setContentTitle("Product")
+                .setOngoing(true)
+                .setContentText("uploading")
+                .setContentIntent(resultPendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+        mBuilder.setSound(null);
+        mBuilder.setVibrate(new long[]{0L});
+        mBuilder.build().flags |= Notification.FLAG_ONGOING_EVENT;
+        mBuilder.setWhen(System.currentTimeMillis());
+        mNotificationManager = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel notificationChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, NOTIFICATION_CHANNEL_NAME, importance);
+            notificationChannel.setDescription("no sound");
+            notificationChannel.setSound(null, null);
+            notificationChannel.enableLights(false);
+            notificationChannel.enableVibration(false);
+            mBuilder.setChannelId(NOTIFICATION_CHANNEL_ID);
+            mNotificationManager.createNotificationChannel(notificationChannel);
+        }
+        mBuilder.setProgress(100, 0, false);
+        mNotificationManager.notify(notificationId, mBuilder.build());
+    }
+
+}
+@Multipart
+    @POST("Product/Create")
+    Call<String> createProduct(@Part("Code") String code,
+                               @Part("Name") String name,
+                               @Part("Description") String description,
+                               @Part("Price") String price,
+                               @Part("Language") int language,
+                               //@Part MultipartBody.Part[] file
+                               @PartMap Map<String, RequestBody> Files);
